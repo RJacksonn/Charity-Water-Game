@@ -7,8 +7,12 @@
   <link href="style.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
+  <header class="brand-header">
+    <img src="img/cw_logo_horizontal.png" alt="Charity: water logo" class="brand-header-logo" />
+  </header>
   <div class="container">
-    <h1>Pipe Connect Puzzle</h1>
+    <h1>Water Flow Challenge</h1>
+    <p class="game-tagline">Connect the pipes to bring clean water to the village!</p>
     <p class="game-instructions">Rotate the pipe pieces to connect the water from the start (top-left) to the goal (bottom-right)!</p>
     <div class="stats">
       <p>Rotations: <span id="rotation-count">0</span></p>
@@ -16,10 +20,24 @@
       <p>Best: <span id="best-score">--</span></p>
     </div>
     <div id="result-message" class="result-message"></div>
+    <div class="difficulty-select" style="text-align:center; margin-bottom:20px;">
+      <label for="difficulty">Difficulty: </label>
+      <select id="difficulty">
+        <option value="easy">Easy</option>
+        <option value="normal" selected>Normal</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
     <div class="game-grid"></div>
     <button id="start-game">Start Game</button>
     <button id="new-game">New Game</button>
   </div>
+  <footer class="brand-footer">
+    <div>
+      <img src="img/cw_logo.png" alt="Charity: water logo" style="height:40px;vertical-align:middle;margin-right:10px;">
+      <span>Support <a href="https://www.charitywater.org/" target="_blank">charity: water</a> &mdash; <a href="https://www.charitywater.org/donate" target="_blank">Donate now</a></span>
+    </div>
+  </footer>
   <script src="script.js"></script>
 </body>
 </html>

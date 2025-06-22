@@ -34,13 +34,21 @@ const PIPE_CONNECTIONS = {
   ]
 };
 
-const GRID_SIZE = 3;
-let grid = [];
 let rotationCount = 0;
 let timer = 0;
 let timerInterval = null;
 let bestScore = null; // {time, rotations}
 let gameActive = false;
+
+// Difficulty settings
+const DIFFICULTY_SETTINGS = {
+  easy:    { maxTime: 120, maxRotations: 40, label: 'Easy', gridSize: 3 },
+  normal:  { maxTime: 60,  maxRotations: 30, label: 'Normal', gridSize: 4 },
+  hard:    { maxTime: 30,  maxRotations: 20, label: 'Hard', gridSize: 5 }
+};
+let currentDifficulty = 'normal';
+let currentSettings = DIFFICULTY_SETTINGS[currentDifficulty];
+let GRID_SIZE = currentSettings.gridSize;
 
 function randomPipeType() {
   return PIPE_TYPES[Math.floor(Math.random() * PIPE_TYPES.length)];
@@ -179,7 +187,7 @@ function getPipeSVG(type, rotation) {
   return `<svg width='100' height='100' viewBox='0 0 100 100' style='transform:rotate(${rotation * 90}deg);'>${gradient}${svg}</svg>`;
 }
 
-function renderGrid() {
+function renderGrid(pathHighlight = []) {
   const gridDiv = document.querySelector('.game-grid');
   gridDiv.innerHTML = '';
   gridDiv.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 1fr)`;
@@ -208,19 +216,35 @@ function renderGrid() {
       label.style.borderRadius = '6px';
       label.style.pointerEvents = 'none';
       cell.appendChild(label);
-      cell.addEventListener('click', () => rotatePipe(row, col));
+      // Highlight connected path
+      if (pathHighlight.some(([r, c]) => r === row && c === col)) {
+        cell.classList.add('connected');
+        const waterAnim = document.createElement('div');
+        waterAnim.className = 'water-anim';
+        waterAnim.style.background = 'radial-gradient(circle, #2E9DF7 60%, transparent 100%)';
+        cell.appendChild(waterAnim);
+      }
+      cell.addEventListener('click', () => handlePipeClick(row, col, cell));
       gridDiv.appendChild(cell);
     }
   }
 }
 
-function rotatePipe(row, col) {
+function handlePipeClick(row, col, cell) {
   // Don't allow rotating start/goal pipes
   if ((row === 0 && col === 0) || (row === GRID_SIZE - 1 && col === GRID_SIZE - 1)) return;
+  const prevWin = checkWin(false);
   grid[row][col].rotation = (grid[row][col].rotation + 1) % 4;
   rotationCount++;
   document.getElementById('rotation-count').textContent = rotationCount;
   renderGrid();
+  // If not improved, shake
+  setTimeout(() => {
+    if (!checkWin(false)) {
+      cell.classList.add('shake');
+      setTimeout(() => cell.classList.remove('shake'), 350);
+    }
+  }, 10);
   checkWin();
 }
 
@@ -237,6 +261,11 @@ function startGame() {
   timerInterval = setInterval(() => {
     timer++;
     document.getElementById('timer').textContent = timer;
+    if (timer >= currentSettings.maxTime) {
+      clearInterval(timerInterval);
+      gameActive = false;
+      document.getElementById('result-message').textContent = `Time's up! (${currentSettings.label} mode)`;
+    }
   }, 1000);
 }
 
@@ -264,7 +293,7 @@ function getConnections(type, rotation) {
   return [0, 0, 0, 0];
 }
 
-function checkWin() {
+function checkWin(showEffects = true) {
   // BFS from (0,0) to (GRID_SIZE-1, GRID_SIZE-1), track path
   const visited = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false));
   const parent = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
@@ -295,10 +324,16 @@ function checkWin() {
     }
   }
   // Remove previous highlights
-  document.querySelectorAll('.grid-cell').forEach(cell => cell.classList.remove('water-flow'));
-  if (found) {
+  document.querySelectorAll('.grid-cell').forEach(cell => cell.classList.remove('water-flow', 'connected'));
+  if (found && showEffects) {
     if (timerInterval) clearInterval(timerInterval);
-    document.getElementById('result-message').textContent = `You win! Time: ${timer}s, Rotations: ${rotationCount}`;
+    let winMsg = `You win! Time: ${timer}s, Rotations: ${rotationCount}`;
+    if (timer > currentSettings.maxTime) {
+      winMsg = `Too slow! Try again (${currentSettings.label} mode)`;
+    } else if (rotationCount > currentSettings.maxRotations) {
+      winMsg = `Too many rotations! Try again (${currentSettings.label} mode)`;
+    }
+    document.getElementById('result-message').textContent = winMsg;
     // Highlight path
     let path = [];
     let cur = [GRID_SIZE - 1, GRID_SIZE - 1];
@@ -306,10 +341,9 @@ function checkWin() {
       path.push(cur);
       cur = parent[cur[0]][cur[1]];
     }
-    path.forEach(([r, c]) => {
-      const idx = r * GRID_SIZE + c;
-      document.querySelectorAll('.grid-cell')[idx].classList.add('water-flow');
-    });
+    renderGrid(path);
+    // Show win bubble
+    showWinBubble();
     // Update best score
     if (!bestScore || timer < bestScore.time || (timer === bestScore.time && rotationCount < bestScore.rotations)) {
       bestScore = { time: timer, rotations: rotationCount };
@@ -319,7 +353,7 @@ function checkWin() {
     return true;
   }
   document.getElementById('result-message').textContent = '';
-  return false;
+  return found;
 }
 
 function updateBestScore() {
@@ -350,3 +384,43 @@ document.getElementById('new-game').addEventListener('click', () => {
   }, 1000);
   updateBestScore();
 });
+// Listen for difficulty change
+const difficultySelect = document.getElementById('difficulty');
+difficultySelect.addEventListener('change', (e) => {
+  currentDifficulty = e.target.value;
+  currentSettings = DIFFICULTY_SETTINGS[currentDifficulty];
+  GRID_SIZE = currentSettings.gridSize;
+  rotationCount = 0;
+  timer = 0;
+  document.getElementById('rotation-count').textContent = rotationCount;
+  document.getElementById('timer').textContent = timer;
+  document.getElementById('result-message').textContent = '';
+  if (timerInterval) clearInterval(timerInterval);
+  createPipeGrid();
+  renderGrid();
+  gameActive = false;
+  updateBestScore();
+});
+
+// Add droplet container to DOM if not present
+function ensureDropletContainer() {
+  if (!document.getElementById('droplet-container')) {
+    const dropletDiv = document.createElement('div');
+    dropletDiv.id = 'droplet-container';
+    document.body.appendChild(dropletDiv);
+  }
+}
+
+function showWinBubble() {
+  // Remove any existing win bubble
+  const oldBubble = document.getElementById('win-bubble');
+  if (oldBubble) oldBubble.remove();
+  // Create bubble
+  const bubble = document.createElement('div');
+  bubble.id = 'win-bubble';
+  bubble.innerHTML = `
+    <div class="brand-logo"></div>
+    <h2>YOU WON!</h2>
+  `;
+  document.body.appendChild(bubble);
+}
